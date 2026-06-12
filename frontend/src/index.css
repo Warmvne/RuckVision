@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import 'video.js/dist/video-js.css';
+
+body {
+  @apply bg-gray-950 text-gray-100 font-sans;
+}
+
+.vjs-theme-rugby .vjs-control-bar {
+  background: rgba(26, 92, 42, 0.9);
+}

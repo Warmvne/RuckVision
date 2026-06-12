@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+.env.local
+
+# Data (vidéos, DB, modèles lourds)
+data/
+backend/models/
+
+# Node
+node_modules/
+dist/
+.cache/
+
+# Vite
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
