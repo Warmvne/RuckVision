@@ -1,100 +1,150 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { Users, BarChart2 } from 'lucide-react'
+import { Users, Trophy, Activity, Target } from 'lucide-react'
 
 export default function TeamsPage() {
   const [teams, setTeams] = useState([])
-  const [selectedTeam, setSelectedTeam] = useState(null)
-  const [teamStats, setTeamStats] = useState(null)
-  const navigate = useNavigate()
+  const [selected, setSelected] = useState(null)
+  const [stats, setStats] = useState(null)
 
-  useEffect(() => {
-    api.getTeams().then(setTeams)
-  }, [])
+  useEffect(() => { api.getTeams().then(setTeams) }, [])
 
-  const handleTeamClick = async (team) => {
-    setSelectedTeam(team)
-    const stats = await api.getTeamStats(team.id)
-    setTeamStats(stats)
+  const handleSelect = async (team) => {
+    setSelected(team)
+    const s = await api.getTeamStats(team.id)
+    setStats(s)
   }
 
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold text-white mb-8 flex items-center gap-2">
-        <Users size={24} /> Équipes
-      </h1>
+  const totalPhases = stats ? Object.values(stats.phase_totals).reduce((a, b) => a + b, 0) : 0
+  const maxPhase = stats ? Math.max(...Object.values(stats.phase_totals), 1) : 1
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="col-span-1">
-          <h2 className="text-gray-400 text-sm font-medium mb-3 uppercase tracking-wide">Toutes les équipes</h2>
+  return (
+    <div className="min-h-full p-8" style={{ background: 'var(--navy)' }}>
+
+      {/* Header */}
+      <div className="mb-8">
+        <p className="text-xs font-semibold tracking-widest mb-2" style={{ color: 'var(--green)' }}>GESTION</p>
+        <h1 className="text-4xl font-bold" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+          Équipes
+        </h1>
+        <div className="h-px mt-5" style={{ background: 'linear-gradient(90deg, var(--green), rgba(0,176,255,0.5), transparent)' }} />
+      </div>
+
+      <div className="grid grid-cols-12 gap-6">
+
+        {/* Team list */}
+        <div className="col-span-4">
+          <p className="text-xs font-semibold tracking-widest mb-4" style={{ color: 'var(--text-muted)' }}>
+            {teams.length} ÉQUIPE{teams.length !== 1 ? 'S' : ''}
+          </p>
           <div className="space-y-2">
             {teams.map(t => (
-              <button key={t.id} onClick={() => handleTeamClick(t)}
-                className={`w-full text-left px-4 py-3 rounded-xl border transition ${
-                  selectedTeam?.id === t.id
-                    ? 'bg-rugby-green/20 border-rugby-green text-white'
-                    : 'bg-gray-900 border-gray-800 text-gray-300 hover:border-gray-600'
-                }`}>
+              <button key={t.id} onClick={() => handleSelect(t)}
+                className="w-full text-left px-4 py-3.5 rounded-xl transition-all duration-200"
+                style={{
+                  background: selected?.id === t.id ? 'rgba(0,230,118,0.06)' : 'var(--navy-2)',
+                  border: `1px solid ${selected?.id === t.id ? 'rgba(0,230,118,0.3)' : 'var(--glass-border)'}`,
+                  boxShadow: selected?.id === t.id ? '0 0 16px rgba(0,230,118,0.08)' : 'none',
+                }}>
                 <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full" style={{ background: t.color }} />
-                  <div>
-                    <p className="font-medium">{t.name}</p>
-                    <p className="text-xs text-gray-500">{t.short_name}</p>
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm"
+                    style={{ background: t.color + '22', color: t.color, border: `1px solid ${t.color}40` }}>
+                    {t.short_name?.slice(0, 2) || t.name?.slice(0, 2)}
                   </div>
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{t.name}</p>
+                    <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{t.short_name}</p>
+                  </div>
+                  {selected?.id === t.id && (
+                    <div className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: 'var(--green)' }} />
+                  )}
                 </div>
               </button>
             ))}
+
             {teams.length === 0 && (
-              <p className="text-gray-600 text-sm">Aucune équipe. Importez des matchs pour créer des équipes.</p>
+              <div className="flex flex-col items-center justify-center py-12 rounded-xl"
+                style={{ border: '2px dashed var(--navy-4)' }}>
+                <Users size={28} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  Importez des matchs pour créer des équipes
+                </p>
+              </div>
             )}
           </div>
         </div>
 
-        <div className="col-span-2">
-          {teamStats && selectedTeam ? (
-            <div>
-              <h2 className="text-white font-semibold text-lg mb-4">{selectedTeam.name}</h2>
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                  <p className="text-gray-500 text-sm">Matchs</p>
-                  <p className="text-2xl font-bold text-white">{teamStats.match_count}</p>
+        {/* Stats panel */}
+        <div className="col-span-8">
+          {stats && selected ? (
+            <div className="fade-in">
+              {/* Team header */}
+              <div className="flex items-center gap-4 mb-6 p-5 rounded-2xl"
+                style={{ background: 'var(--navy-2)', border: '1px solid var(--glass-border)' }}>
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold"
+                  style={{ background: selected.color + '20', color: selected.color, border: `2px solid ${selected.color}40` }}>
+                  {selected.short_name?.slice(0, 2)}
                 </div>
-                <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                  <p className="text-gray-500 text-sm">Possession moy.</p>
-                  <p className="text-2xl font-bold text-white">{Math.round(teamStats.avg_possession_seconds / 60)} min</p>
-                </div>
-                <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                  <p className="text-gray-500 text-sm">Phases totales</p>
-                  <p className="text-2xl font-bold text-white">
-                    {Object.values(teamStats.phase_totals).reduce((a, b) => a + b, 0)}
+                <div>
+                  <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                    {selected.name}
+                  </h2>
+                  <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                    {stats.match_count} match{stats.match_count !== 1 ? 's' : ''} enregistré{stats.match_count !== 1 ? 's' : ''}
                   </p>
                 </div>
               </div>
 
-              <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                <h3 className="text-gray-300 text-sm font-medium mb-3">Phases jouées</h3>
-                <div className="space-y-2">
-                  {Object.entries(teamStats.phase_totals)
+              {/* KPIs */}
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                {[
+                  { icon: Trophy, label: 'Matchs', value: stats.match_count, color: '#ffd600' },
+                  { icon: Activity, label: 'Possession moy.', value: `${Math.round(stats.avg_possession_seconds / 60)} min`, color: 'var(--green)' },
+                  { icon: Target, label: 'Total phases', value: totalPhases, color: '#00b0ff' },
+                ].map(({ icon: Icon, label, value, color }) => (
+                  <div key={label} className="p-4 rounded-xl relative overflow-hidden"
+                    style={{ background: 'var(--navy-2)', border: '1px solid var(--glass-border)' }}>
+                    <div className="absolute top-0 right-0 w-16 h-16 rounded-full opacity-5 -translate-y-4 translate-x-4"
+                      style={{ background: color }} />
+                    <Icon size={16} style={{ color, marginBottom: 8 }} />
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</p>
+                    <p className="text-2xl font-bold mt-1" style={{ color: 'var(--text-primary)' }}>{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Phase breakdown */}
+              <div className="p-5 rounded-2xl" style={{ background: 'var(--navy-2)', border: '1px solid var(--glass-border)' }}>
+                <h3 className="font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Répartition des phases</h3>
+                <div className="space-y-3">
+                  {Object.entries(stats.phase_totals)
                     .sort((a, b) => b[1] - a[1])
-                    .map(([phase, count]) => {
-                      const max = Math.max(...Object.values(teamStats.phase_totals))
-                      return (
-                        <div key={phase} className="flex items-center gap-3">
-                          <span className="text-gray-400 text-sm w-24 capitalize">{phase.replace('_', ' ')}</span>
-                          <div className="flex-1 bg-gray-800 rounded-full h-2">
-                            <div className="bg-rugby-green h-2 rounded-full" style={{ width: `${(count / max) * 100}%` }} />
-                          </div>
-                          <span className="text-white text-sm w-8 text-right">{count}</span>
+                    .map(([phase, count]) => (
+                      <div key={phase} className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full shrink-0"
+                          style={{ background: { ruck: '#f97316', scrum: '#3b82f6', lineout: '#a855f7', open_play: '#00e676', try: '#ffd600', penalty: '#ef4444', kickoff: '#06b6d4', unknown: '#334155' }[phase] || '#334155' }} />
+                        <span className="text-sm w-28 capitalize" style={{ color: 'var(--text-secondary)' }}>
+                          {phase.replace('_', ' ')}
+                        </span>
+                        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--navy-3)' }}>
+                          <div className="h-full rounded-full transition-all duration-700"
+                            style={{
+                              width: `${(count / maxPhase) * 100}%`,
+                              background: `linear-gradient(90deg, var(--green), #00b0ff)`,
+                            }} />
                         </div>
-                      )
-                    })}
+                        <span className="font-mono text-sm w-8 text-right font-semibold"
+                          style={{ color: 'var(--text-primary)' }}>{count}</span>
+                      </div>
+                    ))}
                 </div>
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-full text-gray-600">
-              <p>Sélectionnez une équipe</p>
+            <div className="flex flex-col items-center justify-center h-64 rounded-2xl"
+              style={{ border: '2px dashed var(--navy-4)' }}>
+              <Users size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+              <p style={{ color: 'var(--text-muted)' }}>Sélectionnez une équipe</p>
             </div>
           )}
         </div>
