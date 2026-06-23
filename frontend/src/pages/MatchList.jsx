@@ -1,126 +1,175 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { Upload, Play, BarChart2, Trash2, RefreshCw, CheckCircle, Clock, AlertCircle, Cpu, Zap, TrendingUp } from 'lucide-react'
+import { Upload, Play, BarChart2, Trash2, RefreshCw, CheckCircle, Clock, AlertCircle, Zap } from 'lucide-react'
+import Tilt3D from '../components/Tilt3D'
+import RippleButton from '../components/RippleButton'
+import ProgressRing from '../components/ProgressRing'
 
 const STATUS_CONFIG = {
-  pending:    { icon: Clock,       color: '#ffd600', label: 'En attente',    bg: 'rgba(255,214,0,0.1)' },
-  processing: { icon: RefreshCw,   color: '#00b0ff', label: 'Traitement...',  bg: 'rgba(0,176,255,0.1)', spin: true },
-  ready:      { icon: CheckCircle, color: '#00e676', label: 'Prêt',           bg: 'rgba(0,230,118,0.1)' },
-  error:      { icon: AlertCircle, color: '#ff5252', label: 'Erreur',         bg: 'rgba(255,82,82,0.1)' },
+  pending:    { icon: Clock,       color: '#ffc640', label: 'En attente',   bg: 'rgba(255,198,64,0.08)' },
+  processing: { icon: RefreshCw,   color: 'var(--blue)', label: 'Traitement', bg: 'rgba(0,200,255,0.08)', spin: true },
+  ready:      { icon: CheckCircle, color: 'var(--green)', label: 'Prêt',     bg: 'rgba(0,255,136,0.08)' },
+  error:      { icon: AlertCircle, color: '#ff5252', label: 'Erreur',        bg: 'rgba(255,82,82,0.08)' },
 }
 
 function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending
-  const Icon = cfg.icon
+  const c = STATUS_CONFIG[status] || STATUS_CONFIG.pending
+  const Icon = c.icon
   return (
-    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-      style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}30` }}>
-      <Icon size={11} className={cfg.spin ? 'animate-spin' : ''} />
-      {cfg.label}
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '3px 10px', borderRadius: 99,
+      background: c.bg, color: c.color,
+      border: `1px solid ${c.color}30`,
+      fontSize: 11, fontWeight: 600,
+    }}>
+      <Icon size={10} className={c.spin ? 'animate-spin' : ''} />
+      {c.label}
     </span>
   )
 }
 
-function MatchCard({ match, onDelete, onAnalyze, onReview, onStats }) {
-  const [hovered, setHovered] = useState(false)
+function MatchCard({ match, onDelete, onAnalyze, onReview, onStats, index }) {
+  const aiPct = match.ai_analyzed ? 100 : 0
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="rounded-2xl overflow-hidden transition-all duration-300 fade-in"
+    <Tilt3D
+      intensity={8}
+      className={`fade-in-delay-${Math.min(index % 3 + 1, 3)}`}
       style={{
+        borderRadius: 20,
+        overflow: 'hidden',
         background: 'var(--navy-2)',
-        border: `1px solid ${hovered ? 'rgba(0,230,118,0.3)' : 'var(--glass-border)'}`,
-        boxShadow: hovered ? '0 8px 40px rgba(0,230,118,0.08), 0 0 0 1px rgba(0,230,118,0.1)' : '0 4px 24px rgba(0,0,0,0.3)',
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        border: '1px solid var(--glass-border)',
+        transition: 'border-color 0.3s ease',
       }}>
-
       {/* Thumbnail */}
-      <div className="relative aspect-video overflow-hidden" style={{ background: 'var(--navy-3)' }}>
-        {match.thumbnail_path ? (
-          <img src={`/thumbnails/${match.id}.jpg`} className="w-full h-full object-cover" alt="" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center"
-              style={{ background: 'var(--green-glow)', border: '1px solid rgba(0,230,118,0.2)' }}>
-              <Play size={24} style={{ color: 'var(--green)' }} />
+      <div style={{ position: 'relative', aspectRatio: '16/9', background: 'var(--navy-3)', overflow: 'hidden' }}>
+        {match.thumbnail_path
+          ? <img src={`/thumbnails/${match.id}.jpg`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+          : (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {/* Retro-futurist placeholder */}
+              <div style={{
+                width: 64, height: 64, borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(0,255,136,0.15) 0%, transparent 70%)',
+                border: '1px solid rgba(0,255,136,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Play size={22} style={{ color: 'var(--green)' }} />
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Overlay gradient */}
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, var(--navy-2) 0%, transparent 60%)' }} />
+        {/* Cinematic gradient overlay */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(to top, var(--navy-2) 0%, rgba(7,15,28,0.6) 50%, transparent 100%)',
+        }} />
 
         {/* Badges */}
-        <div className="absolute top-3 right-3">
+        <div style={{ position: 'absolute', top: 10, right: 10 }}>
           <StatusBadge status={match.status} />
         </div>
         {match.ai_analyzed && (
-          <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-            style={{ background: 'rgba(124,58,237,0.2)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)' }}>
-            <Cpu size={11} /> IA analysé
+          <div style={{
+            position: 'absolute', top: 10, left: 10,
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '3px 10px', borderRadius: 99,
+            background: 'rgba(100,60,200,0.2)', color: '#b39ddb',
+            border: '1px solid rgba(179,157,219,0.25)',
+            fontSize: 11, fontWeight: 600,
+          }}>
+            <Zap size={10} fill="currentColor" /> IA analysé
           </div>
         )}
 
-        {/* Duration */}
+        {/* Duration badge */}
         {match.duration_seconds && (
-          <div className="absolute bottom-3 right-3 font-mono text-xs px-2 py-0.5 rounded-md"
-            style={{ background: 'rgba(5,13,26,0.8)', color: 'var(--text-secondary)' }}>
+          <div style={{
+            position: 'absolute', bottom: 10, right: 10,
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
+            padding: '2px 8px', borderRadius: 6,
+            background: 'rgba(3,8,15,0.8)', color: 'var(--text-secondary)',
+            border: '1px solid var(--glass-border)',
+          }}>
             {Math.floor(match.duration_seconds / 60)}:{String(Math.floor(match.duration_seconds % 60)).padStart(2,'0')}
           </div>
         )}
       </div>
 
-      {/* Content */}
-      <div className="p-4">
-        <h3 className="font-semibold text-base truncate" style={{ color: 'var(--text-primary)' }}>{match.title}</h3>
-        {(match.home_team || match.away_team) && (
-          <p className="text-sm mt-1 font-medium" style={{ color: 'var(--text-secondary)' }}>
-            {match.home_team} <span style={{ color: 'var(--text-muted)' }}>vs</span> {match.away_team}
-          </p>
-        )}
+      {/* Card body */}
+      <div style={{ padding: '16px 16px 14px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ minWidth: 0 }}>
+            <h3 style={{
+              fontWeight: 700, fontSize: 15,
+              color: 'var(--text-primary)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              letterSpacing: '-0.01em',
+            }}>{match.title}</h3>
+            {(match.home_team || match.away_team) && (
+              <p style={{ fontSize: 12, marginTop: 3, color: 'var(--text-secondary)' }}>
+                {match.home_team} <span style={{ color: 'var(--text-muted)' }}>vs</span> {match.away_team}
+              </p>
+            )}
+          </div>
+          {/* Progress ring gamification */}
+          <ProgressRing pct={aiPct} size={42} stroke={3}
+            color={aiPct === 100 ? 'var(--green)' : 'var(--text-muted)'}
+            label={aiPct === 100 ? '✓' : '—'} />
+        </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-2 mt-4">
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
           {match.status === 'ready' && !match.ai_analyzed && (
-            <button onClick={() => onAnalyze(match.id)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200"
-              style={{ background: 'rgba(124,58,237,0.15)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.25)' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(124,58,237,0.3)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(124,58,237,0.15)'}>
+            <RippleButton onClick={() => onAnalyze(match.id)}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                padding: '8px 0', borderRadius: 12, border: '1px solid rgba(179,157,219,0.3)',
+                background: 'rgba(100,60,200,0.12)', color: '#b39ddb',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}>
               <Zap size={12} /> Analyser IA
-            </button>
+            </RippleButton>
           )}
           {match.status === 'ready' && (
-            <button onClick={() => onReview(match.id)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200"
-              style={{ background: 'rgba(0,230,118,0.1)', color: 'var(--green)', border: '1px solid rgba(0,230,118,0.25)' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,230,118,0.2)'; e.currentTarget.style.boxShadow = '0 0 16px rgba(0,230,118,0.2)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,230,118,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}>
+            <RippleButton onClick={() => onReview(match.id)}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                padding: '8px 0', borderRadius: 12, border: '1px solid rgba(0,255,136,0.25)',
+                background: 'var(--green-faint)', color: 'var(--green)',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}>
               <Play size={12} /> Revue
-            </button>
+            </RippleButton>
           )}
           {match.ai_analyzed && (
-            <button onClick={() => onStats(match.id)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200"
-              style={{ background: 'rgba(0,176,255,0.1)', color: '#00b0ff', border: '1px solid rgba(0,176,255,0.25)' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,176,255,0.2)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,176,255,0.1)'}>
+            <RippleButton onClick={() => onStats(match.id)}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                padding: '8px 0', borderRadius: 12, border: '1px solid rgba(0,200,255,0.2)',
+                background: 'rgba(0,200,255,0.06)', color: 'var(--blue)',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}>
               <BarChart2 size={12} /> Stats
-            </button>
+            </RippleButton>
           )}
           <button onClick={() => onDelete(match.id)}
-            className="w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200"
-            style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-muted)' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,82,82,0.1)'; e.currentTarget.style.color = '#ff5252'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'var(--glass)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+            style={{
+              width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--glass)', border: '1px solid var(--glass-border)',
+              color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,82,82,0.1)'; e.currentTarget.style.color = '#ff5252' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--glass)'; e.currentTarget.style.color = 'var(--text-muted)' }}>
             <Trash2 size={13} />
           </button>
         </div>
       </div>
-    </div>
+    </Tilt3D>
   )
 }
 
@@ -143,116 +192,148 @@ export default function MatchList() {
   }, [])
 
   const handleFile = async (file) => {
-    if (!file || !file.type.startsWith('video/')) return
+    if (!file?.type.startsWith('video/')) return
     setUploading(true)
     const fd = new FormData()
     fd.append('file', file)
     fd.append('title', file.name.replace(/\.[^.]+$/, ''))
-    try {
-      await api.uploadMatch(fd)
-      await load()
-    } finally {
-      setUploading(false)
-      if (fileRef.current) fileRef.current.value = ''
-    }
+    try { await api.uploadMatch(fd); await load() }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
   }
 
-  const handleDrop = (e) => {
-    e.preventDefault()
-    setDragOver(false)
-    const file = e.dataTransfer.files[0]
-    handleFile(file)
-  }
-
-  const ready = matches.filter(m => m.status === 'ready').length
-  const analyzed = matches.filter(m => m.ai_analyzed).length
+  const ready     = matches.filter(m => m.status === 'ready').length
+  const analyzed  = matches.filter(m => m.ai_analyzed).length
 
   return (
-    <div className="min-h-full p-8" style={{ background: 'var(--navy)' }}>
+    <div style={{ minHeight: '100%', padding: '40px 36px', background: 'var(--navy)' }}>
 
-      {/* Header */}
-      <div className="mb-10">
-        <div className="flex items-start justify-between">
+      {/* ── Kinetic ticker ── */}
+      <div className="ticker-wrap" style={{ marginBottom: 32, height: 28 }}>
+        <div className="ticker-inner" style={{ height: '100%', alignItems: 'center' }}>
+          {Array(2).fill(null).map((_, i) => (
+            <span key={i} style={{
+              display: 'inline-flex', gap: 0, alignItems: 'center',
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
+              color: 'var(--text-muted)', textTransform: 'uppercase',
+            }}>
+              {['ANALYSE VIDÉO', 'RUGBY', 'IA TEMPS RÉEL', 'SAM 3.1', 'YOLOv8', 'DÉTECTION AVANCÉE', 'SEGMENTATION AUTO'].map((t, j) => (
+                <span key={j} style={{ display: 'inline-flex', alignItems: 'center', gap: 32, paddingRight: 32 }}>
+                  <span style={{ color: 'var(--green)', marginRight: 8 }}>◆</span>{t}
+                </span>
+              ))}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Header ── */}
+      <div style={{ marginBottom: 36 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
-            <p className="text-xs font-semibold tracking-widest mb-2" style={{ color: 'var(--green)' }}>ANALYSE VIDÉO</p>
-            <h1 className="text-4xl font-bold" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-              Matchs
+            <h1 className="text-display text-chrome fade-in" style={{ marginBottom: 6 }}>
+              RuckVision
             </h1>
-            <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {matches.length} match{matches.length !== 1 ? 's' : ''} · {ready} prêt{ready !== 1 ? 's' : ''} · {analyzed} analysé{analyzed !== 1 ? 's' : ''} par IA
+            <p className="fade-in-delay-1" style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+              {matches.length} match{matches.length !== 1 ? 's' : ''}
+              <span style={{ color: 'var(--text-muted)', margin: '0 8px' }}>·</span>
+              <span style={{ color: 'var(--green)' }}>{ready}</span> prêt{ready !== 1 ? 's' : ''}
+              <span style={{ color: 'var(--text-muted)', margin: '0 8px' }}>·</span>
+              <span style={{ color: 'var(--blue)' }}>{analyzed}</span> analysé{analyzed !== 1 ? 's' : ''} par IA
             </p>
           </div>
 
-          {/* Upload button */}
-          <label
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl cursor-pointer font-semibold text-sm transition-all duration-200 relative overflow-hidden"
-            style={uploading
-              ? { background: 'var(--navy-3)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }
-              : { background: 'linear-gradient(135deg, #00e676, #00b0ff)', color: '#050d1a', boxShadow: '0 0 24px rgba(0,230,118,0.3)' }
-            }>
-            <Upload size={15} />
-            {uploading ? 'Upload en cours...' : 'Importer un match'}
-            <input ref={fileRef} type="file" accept="video/*" className="hidden"
-              onChange={e => handleFile(e.target.files[0])} disabled={uploading} />
-          </label>
+          <RippleButton
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '10px 22px', borderRadius: 14,
+              background: uploading ? 'var(--navy-3)' : 'linear-gradient(135deg, var(--green), var(--blue))',
+              color: uploading ? 'var(--text-muted)' : 'var(--navy)',
+              border: 'none', fontSize: 13, fontWeight: 700,
+              cursor: uploading ? 'not-allowed' : 'pointer',
+              boxShadow: uploading ? 'none' : '0 0 28px rgba(0,255,136,0.25)',
+              transition: 'all 0.3s ease',
+            }}>
+            <Upload size={14} />
+            {uploading ? 'Upload...' : 'Importer'}
+          </RippleButton>
+          <input ref={fileRef} type="file" accept="video/*" style={{ display: 'none' }}
+            onChange={e => handleFile(e.target.files[0])} />
         </div>
 
-        {/* Separator */}
-        <div className="mt-6 h-px" style={{ background: 'linear-gradient(90deg, var(--green), rgba(0,176,255,0.5), transparent)' }} />
+        {/* Gradient separator */}
+        <div style={{
+          height: 1, marginTop: 20,
+          background: 'linear-gradient(90deg, var(--green), var(--blue), transparent)',
+        }} />
       </div>
 
-      {/* Empty state / Drop zone */}
+      {/* ── Empty / Drop Zone ── */}
       {matches.length === 0 && (
         <div
-          onDrop={handleDrop}
+          onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]) }}
           onDragOver={e => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
-          className="flex flex-col items-center justify-center rounded-2xl py-24 transition-all duration-300 cursor-pointer"
+          onClick={() => fileRef.current?.click()}
           style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 24, padding: '80px 40px',
             border: `2px dashed ${dragOver ? 'var(--green)' : 'var(--navy-4)'}`,
-            background: dragOver ? 'var(--green-glow)' : 'transparent',
-          }}
-          onClick={() => fileRef.current?.click()}>
-          <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6"
-            style={{ background: 'var(--green-glow)', border: '1px solid rgba(0,230,118,0.2)' }}>
-            <Upload size={32} style={{ color: 'var(--green)' }} />
+            background: dragOver ? 'var(--green-faint)' : 'transparent',
+            cursor: 'pointer', transition: 'all 0.3s ease',
+          }}>
+          <div style={{
+            width: 80, height: 80, borderRadius: '50%', marginBottom: 20,
+            background: 'radial-gradient(circle, rgba(0,255,136,0.12) 0%, transparent 70%)',
+            border: '1px solid rgba(0,255,136,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 40px rgba(0,255,136,0.1)',
+          }}>
+            <Upload size={28} style={{ color: 'var(--green)' }} />
           </div>
-          <p className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+          <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, letterSpacing: '-0.02em' }}>
             Glissez une vidéo ici
           </p>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            MP4, MKV, AVI, MOV, WebM — tous formats supportés
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            MP4 · MKV · AVI · MOV · WebM — tous formats supportés via FFmpeg
           </p>
         </div>
       )}
 
-      {/* Drop overlay when matches exist */}
-      {matches.length > 0 && (
+      {/* ── Drop overlay when matches exist ── */}
+      {matches.length > 0 && dragOver && (
         <div
-          onDrop={handleDrop}
-          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]) }}
+          onDragOver={e => e.preventDefault()}
           onDragLeave={() => setDragOver(false)}
-          className={`mb-6 flex items-center justify-center rounded-xl py-4 transition-all duration-300 ${dragOver ? 'opacity-100' : 'opacity-0 pointer-events-none h-0 py-0 mb-0 overflow-hidden'}`}
-          style={{ border: '2px dashed var(--green)', background: 'var(--green-glow)' }}>
-          <p className="text-sm font-medium" style={{ color: 'var(--green)' }}>Déposer la vidéo</p>
+          style={{
+            marginBottom: 20, padding: '16px',
+            borderRadius: 16, border: '2px dashed var(--green)',
+            background: 'var(--green-faint)',
+            textAlign: 'center', fontSize: 13, color: 'var(--green)', fontWeight: 600,
+          }}>
+          Déposer la vidéo
         </div>
       )}
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        {matches.map(m => (
+      {/* ── Grid ── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+        gap: 20,
+      }}>
+        {matches.map((m, i) => (
           <MatchCard
             key={m.id}
             match={m}
+            index={i}
             onDelete={async (id) => {
               if (!confirm('Supprimer ce match ?')) return
               await api.deleteMatch(id)
               setMatches(prev => prev.filter(x => x.id !== id))
             }}
-            onAnalyze={async (id) => {
-              await api.analyzeMatch(id)
-              await load()
-            }}
+            onAnalyze={async (id) => { await api.analyzeMatch(id); await load() }}
             onReview={(id) => navigate(`/match/${id}/review`)}
             onStats={(id) => navigate(`/match/${id}/dashboard`)}
           />
