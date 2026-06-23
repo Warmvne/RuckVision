@@ -3,60 +3,23 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import VideoPlayer from '../components/VideoPlayer'
 import SegmentTimeline from '../components/SegmentTimeline'
-import {
-  CheckCircle, XCircle, Scissors, ChevronLeft, ChevronRight,
-  Plus, ArrowLeft, Save, Zap, Edit3
-} from 'lucide-react'
+import ProgressRing from '../components/ProgressRing'
+import RippleButton from '../components/RippleButton'
+import { CheckCircle, XCircle, Scissors, ChevronLeft, ChevronRight, Plus, ArrowLeft, Save, Edit3, Zap } from 'lucide-react'
 
-const PHASES = ['ruck', 'scrum', 'lineout', 'open_play', 'try', 'conversion', 'penalty', 'kickoff', 'unknown']
-const PHASE_LABELS = {
-  ruck: 'Ruck', scrum: 'Mêlée', lineout: 'Touche', open_play: 'Jeu ouvert',
-  try: 'Essai', conversion: 'Transformation', penalty: 'Pénalité',
-  kickoff: "Coup d'envoi", unknown: 'Inconnu',
-}
-const ZONES = ['own_22', 'own_half', 'opp_half', 'opp_22']
-const ZONE_LABELS = {
-  own_22: '22m défensif', own_half: 'Mi-terrain déf.',
-  opp_half: 'Mi-terrain att.', opp_22: '22m offensif',
-}
+const PHASES = ['ruck','scrum','lineout','open_play','try','conversion','penalty','kickoff','unknown']
+const PHASE_LABELS = { ruck:'Ruck', scrum:'Mêlée', lineout:'Touche', open_play:'Jeu ouvert', try:'Essai', conversion:'Transformation', penalty:'Pénalité', kickoff:"Coup d'envoi", unknown:'Inconnu' }
+const ZONES  = ['own_22','own_half','opp_half','opp_22']
+const ZONE_LABELS = { own_22:'22m défensif', own_half:'Mi-terrain déf.', opp_half:'Mi-terrain att.', opp_22:'22m offensif' }
+const PHASE_DOT = { ruck:'#f97316', scrum:'#38bdf8', lineout:'#a78bfa', open_play:'#00e5a0', try:'#fbbf24', conversion:'#fde68a', penalty:'#f87171', kickoff:'#00c8ff', unknown:'var(--bg-4)' }
+const STATUS_BADGE = { ai_proposed:{ bg:'var(--purple-soft)', color:'var(--purple)', label:'IA' }, validated:{ bg:'var(--green-soft)', color:'var(--green)', label:'✓' }, rejected:{ bg:'rgba(248,113,113,0.1)', color:'var(--red)', label:'✗' }, edited:{ bg:'var(--blue-soft)', color:'var(--blue)', label:'✎' } }
 
-const STATUS_STYLE = {
-  ai_proposed: { bg: 'rgba(124,58,237,0.15)', color: '#a78bfa', label: 'IA' },
-  validated:   { bg: 'rgba(0,230,118,0.12)', color: '#00e676', label: '✓' },
-  rejected:    { bg: 'rgba(255,82,82,0.1)',  color: '#ff5252', label: '✗' },
-  edited:      { bg: 'rgba(0,176,255,0.12)', color: '#00b0ff', label: '✎' },
-}
-
-const PHASE_DOT = {
-  ruck: '#f97316', scrum: '#3b82f6', lineout: '#a855f7', open_play: '#00e676',
-  try: '#ffd600', conversion: '#fde047', penalty: '#ef4444', kickoff: '#06b6d4', unknown: '#334155',
-}
-
-function formatTime(s) {
-  const m = Math.floor(s / 60)
-  const sec = Math.floor(s % 60)
-  return `${m}:${sec.toString().padStart(2, '0')}`
-}
-
-function ActionBtn({ onClick, icon: Icon, label, color, bg, hoverBg }) {
-  const [hov, setHov] = useState(false)
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
-      style={{ background: hov ? hoverBg : bg, color, border: `1px solid ${color}30` }}>
-      <Icon size={13} /> {label}
-    </button>
-  )
-}
+function fmt(s) { return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}` }
 
 export default function ReviewPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const playerRef = useRef(null)
-
   const [match, setMatch] = useState(null)
   const [segments, setSegments] = useState([])
   const [selected, setSelected] = useState(null)
@@ -65,303 +28,222 @@ export default function ReviewPage() {
 
   const load = useCallback(async () => {
     const [m, segs] = await Promise.all([api.getMatch(id), api.getSegments(id)])
-    setMatch(m)
-    setSegments(segs)
+    setMatch(m); setSegments(segs)
   }, [id])
 
   useEffect(() => { load() }, [load])
 
-  const select = (seg) => {
-    setSelected(seg)
-    setEditing({ ...seg })
-    playerRef.current?.currentTime(seg.start_time)
-  }
+  const select = seg => { setSelected(seg); setEditing({...seg}); playerRef.current?.currentTime(seg.start_time) }
+  const navSeg = dir => { const a = segments.filter(s => s.status !== 'rejected'); const i = a.findIndex(s => s.id === selected?.id); const n = a[i+dir]; if (n) select(n) }
 
-  const navigateSeg = (dir) => {
-    const active = segments.filter(s => s.status !== 'rejected')
-    const idx = active.findIndex(s => s.id === selected?.id)
-    const next = active[idx + dir]
-    if (next) select(next)
-  }
-
-  const handleValidate = async () => {
-    await api.validateSegment(selected.id)
-    await load()
-    navigateSeg(1)
-  }
-
-  const handleReject = async () => {
-    await api.rejectSegment(selected.id)
-    await load()
-    navigateSeg(1)
-  }
-
-  const handleSave = async () => {
-    await api.updateSegment(selected.id, {
-      start_time: editing.start_time,
-      end_time: editing.end_time,
-      phase_type: editing.phase_type,
-      team_possession: editing.team_possession,
-      field_zone: editing.field_zone,
-      notes: editing.notes,
-      label: editing.label,
-    })
+  const handleValidate = async () => { await api.validateSegment(selected.id); await load(); navSeg(1) }
+  const handleReject   = async () => { await api.rejectSegment(selected.id);   await load(); navSeg(1) }
+  const handleSave     = async () => {
+    await api.updateSegment(selected.id, { start_time:editing.start_time, end_time:editing.end_time, phase_type:editing.phase_type, team_possession:editing.team_possession, field_zone:editing.field_zone, notes:editing.notes, label:editing.label })
     await load()
   }
-
   const handleSplit = async () => {
-    if (!selected) return
     const t = playerRef.current?.currentTime() ?? currentTime
-    if (t <= selected.start_time || t >= selected.end_time) {
-      alert('Placez la tête de lecture à l\'intérieur du segment.')
-      return
-    }
-    await api.splitSegment(selected.id, t)
-    await load()
+    if (!selected || t <= selected.start_time || t >= selected.end_time) { alert("Placez la tête de lecture à l'intérieur du segment."); return }
+    await api.splitSegment(selected.id, t); await load()
   }
 
-  const hlsSrc = `/hls/${id}/index.m3u8`
+  const stats = { total: segments.length, validated: segments.filter(s => s.status === 'validated').length }
+  const pct   = stats.total ? Math.round(stats.validated / stats.total * 100) : 0
 
-  const stats = {
-    total: segments.length,
-    validated: segments.filter(s => s.status === 'validated').length,
-    pending: segments.filter(s => s.status === 'ai_proposed').length,
-    pct: segments.length ? Math.round(segments.filter(s => s.status === 'validated').length / segments.length * 100) : 0,
+  const inputStyle = {
+    width: '100%', padding: '8px 12px', borderRadius: 10, fontSize: 13,
+    background: 'var(--bg-3)', color: 'var(--t1)',
+    border: '1px solid var(--border)', outline: 'none',
+    transition: 'border-color 0.2s',
   }
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: 'var(--navy)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)' }}>
 
-      {/* Top bar */}
-      <header className="flex items-center gap-4 px-6 py-3 shrink-0"
-        style={{ background: 'var(--navy-2)', borderBottom: '1px solid var(--glass-border)' }}>
-        <button onClick={() => navigate('/')}
-          className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
-          style={{ color: 'var(--text-muted)' }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
-          <ArrowLeft size={17} />
+      {/* ── Top bar ── */}
+      <header style={{ display:'flex', alignItems:'center', gap:12, padding:'0 20px', height:52, flexShrink:0, background:'var(--bg-2)', borderBottom:'1px solid var(--border)' }}>
+        <button onClick={() => navigate('/')} style={{ width:32, height:32, borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', background:'var(--glass)', border:'1px solid var(--border)', color:'var(--t2)', cursor:'pointer', flexShrink:0 }}
+          onMouseEnter={e=>e.currentTarget.style.color='var(--t1)'} onMouseLeave={e=>e.currentTarget.style.color='var(--t2)'}>
+          <ArrowLeft size={15} />
         </button>
 
-        <div className="h-4 w-px" style={{ background: 'var(--glass-border)' }} />
+        <div style={{ width:1, height:20, background:'var(--border)', flexShrink:0 }} />
 
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full pulse-dot" style={{ background: 'var(--green)' }} />
-          <h2 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{match?.title}</h2>
+        <div style={{ display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
+          <div className="pulse-dot" style={{ width:7, height:7, borderRadius:'50%', background:'var(--green)', flexShrink:0 }} />
+          <p style={{ fontWeight:600, fontSize:14, color:'var(--t1)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{match?.title}</p>
+          {match?.home_team && <span style={{ fontSize:12, color:'var(--t3)', whiteSpace:'nowrap' }}>{match.home_team} <span style={{color:'var(--t4)'}}>vs</span> {match.away_team}</span>}
         </div>
 
-        {match?.home_team && (
-          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            {match.home_team} <span style={{ color: 'var(--text-muted)' }}>vs</span> {match.away_team}
-          </span>
-        )}
-
-        <div className="ml-auto flex items-center gap-4">
-          {/* Progress bar */}
-          <div className="flex items-center gap-3">
-            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              {stats.validated}/{stats.total} validés
-            </span>
-            <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--navy-3)' }}>
-              <div className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${stats.pct}%`, background: 'linear-gradient(90deg, var(--green), #00b0ff)' }} />
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:16 }}>
+          {/* Progress */}
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <ProgressRing pct={pct} size={36} stroke={3} color="var(--green)" />
+            <div>
+              <p style={{ fontSize:11, color:'var(--t2)', lineHeight:1 }}>{stats.validated}/{stats.total} validés</p>
+              <p style={{ fontSize:10, color:'var(--t3)', lineHeight:1.5 }}>en attente: {segments.filter(s=>s.status==='ai_proposed').length}</p>
             </div>
-            <span className="text-xs font-mono" style={{ color: 'var(--green)' }}>{stats.pct}%</span>
           </div>
-
-          <button onClick={() => navigate(`/match/${id}/dashboard`)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-            style={{ background: 'rgba(0,176,255,0.1)', color: '#00b0ff', border: '1px solid rgba(0,176,255,0.2)' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,176,255,0.2)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,176,255,0.1)'}>
+          <div style={{ width:1, height:20, background:'var(--border)' }} />
+          <RippleButton onClick={() => navigate(`/match/${id}/dashboard`)} style={{
+            display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:9,
+            background:'var(--blue-soft)', color:'var(--blue)', border:'1px solid rgba(56,189,248,0.25)',
+            fontSize:12, fontWeight:600, cursor:'pointer',
+          }}>
             <Zap size={12} /> Stats
-          </button>
+          </RippleButton>
         </div>
       </header>
 
-      {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* ── Body ── */}
+      <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
 
-        {/* Main: video + timeline + controls */}
-        <div className="flex flex-col flex-1 p-4 gap-3 overflow-hidden">
-
-          {/* Video */}
-          <div className="flex-1 rounded-2xl overflow-hidden" style={{ background: '#000', minHeight: 0 }}>
-            <VideoPlayer src={hlsSrc} onTimeUpdate={setCurrentTime} playerRef={playerRef} />
+        {/* Video + timeline + controls */}
+        <div style={{ display:'flex', flexDirection:'column', flex:1, padding:'12px', gap:10, overflow:'hidden' }}>
+          <div style={{ flex:1, borderRadius:16, overflow:'hidden', background:'#000', minHeight:0 }}>
+            <VideoPlayer src={`/hls/${id}/index.m3u8`} onTimeUpdate={setCurrentTime} playerRef={playerRef} />
           </div>
 
           {/* Timeline */}
-          <div className="shrink-0 px-1">
-            <SegmentTimeline
-              segments={segments}
-              duration={match?.duration_seconds}
-              currentTime={currentTime}
-              onSeek={t => playerRef.current?.currentTime(t)}
-              selectedId={selected?.id}
-              onSelect={select}
-            />
-          </div>
+          <SegmentTimeline segments={segments} duration={match?.duration_seconds} currentTime={currentTime}
+            onSeek={t => playerRef.current?.currentTime(t)} selectedId={selected?.id} onSelect={select} />
 
           {/* Controls */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => navigateSeg(-1)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
-              style={{ background: 'var(--navy-3)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--green)'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--glass-border)'}>
-              <ChevronLeft size={16} />
-            </button>
-            <button onClick={() => navigateSeg(1)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
-              style={{ background: 'var(--navy-3)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--green)'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--glass-border)'}>
-              <ChevronRight size={16} />
-            </button>
+          <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+            {[[-1, ChevronLeft], [1, ChevronRight]].map(([dir, Icon]) => (
+              <button key={dir} onClick={() => navSeg(dir)} style={{
+                width:34, height:34, borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center',
+                background:'var(--bg-2)', border:'1px solid var(--border)', color:'var(--t2)', cursor:'pointer', transition:'all 0.2s',
+              }} onMouseEnter={e=>e.currentTarget.style.borderColor='var(--green)'} onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
+                <Icon size={15} />
+              </button>
+            ))}
 
-            <div className="w-px h-5 mx-1" style={{ background: 'var(--glass-border)' }} />
+            <div style={{ width:1, height:20, background:'var(--border)', margin:'0 2px' }} />
 
-            <ActionBtn onClick={handleSplit} icon={Scissors} label="Couper"
-              color="#ffd600" bg="rgba(255,214,0,0.08)" hoverBg="rgba(255,214,0,0.16)" />
-            <ActionBtn onClick={async () => {
+            <RippleButton onClick={handleSplit} style={{
+              display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:9,
+              background:'var(--gold-soft)', color:'var(--gold)', border:'1px solid rgba(251,191,36,0.3)',
+              fontSize:12, fontWeight:600, cursor:'pointer',
+            }}><Scissors size={13}/> Couper</RippleButton>
+
+            <RippleButton onClick={async () => {
               const t = playerRef.current?.currentTime() ?? currentTime
-              await api.createSegment({ match_id: parseInt(id), start_time: t, end_time: Math.min(t + 10, match?.duration_seconds ?? t + 10) })
+              await api.createSegment({ match_id:parseInt(id), start_time:t, end_time:Math.min(t+10, match?.duration_seconds??t+10) })
               await load()
-            }} icon={Plus} label="Segment"
-              color="var(--green)" bg="rgba(0,230,118,0.08)" hoverBg="rgba(0,230,118,0.16)" />
+            }} style={{
+              display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:9,
+              background:'var(--green-soft)', color:'var(--green)', border:'1px solid rgba(0,229,160,0.3)',
+              fontSize:12, fontWeight:600, cursor:'pointer',
+            }}><Plus size={13}/> Segment</RippleButton>
 
             {selected && (
-              <div className="ml-auto flex gap-2">
-                <ActionBtn onClick={handleValidate} icon={CheckCircle} label="Valider"
-                  color="#00e676" bg="rgba(0,230,118,0.1)" hoverBg="rgba(0,230,118,0.2)" />
-                <ActionBtn onClick={handleReject} icon={XCircle} label="Rejeter"
-                  color="#ff5252" bg="rgba(255,82,82,0.1)" hoverBg="rgba(255,82,82,0.2)" />
+              <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
+                <RippleButton onClick={handleValidate} style={{
+                  display:'flex', alignItems:'center', gap:6, padding:'7px 16px', borderRadius:9,
+                  background:'var(--green-soft)', color:'var(--green)', border:'1px solid rgba(0,229,160,0.35)',
+                  fontSize:12, fontWeight:700, cursor:'pointer',
+                }}><CheckCircle size={14}/> Valider</RippleButton>
+                <RippleButton onClick={handleReject} style={{
+                  display:'flex', alignItems:'center', gap:6, padding:'7px 16px', borderRadius:9,
+                  background:'rgba(248,113,113,0.1)', color:'var(--red)', border:'1px solid rgba(248,113,113,0.3)',
+                  fontSize:12, fontWeight:700, cursor:'pointer',
+                }}><XCircle size={14}/> Rejeter</RippleButton>
               </div>
             )}
           </div>
         </div>
 
-        {/* Sidebar */}
-        <div className="w-80 flex flex-col overflow-hidden"
-          style={{ borderLeft: '1px solid var(--glass-border)', background: 'var(--navy-2)' }}>
+        {/* ── Sidebar ── */}
+        <aside style={{ width:300, display:'flex', flexDirection:'column', overflow:'hidden', background:'var(--bg-2)', borderLeft:'1px solid var(--border)' }}>
 
           {/* Edit panel */}
           {editing && selected && (
-            <div className="p-4 shrink-0" style={{ borderBottom: '1px solid var(--glass-border)' }}>
-              <div className="flex items-center gap-2 mb-3">
-                <Edit3 size={13} style={{ color: 'var(--green)' }} />
-                <span className="text-xs font-semibold" style={{ color: 'var(--green)' }}>ÉDITION</span>
-                <span className="ml-auto font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {formatTime(selected.start_time)} → {formatTime(selected.end_time)}
+            <div style={{ padding:'14px 14px 12px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:12 }}>
+                <Edit3 size={12} style={{ color:'var(--green)' }} />
+                <span style={{ fontSize:10, fontWeight:700, letterSpacing:'0.1em', color:'var(--green)', textTransform:'uppercase' }}>Édition</span>
+                <span style={{ marginLeft:'auto', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:'var(--t3)' }}>
+                  {fmt(selected.start_time)} → {fmt(selected.end_time)}
                 </span>
               </div>
 
-              <div className="space-y-2.5">
-                {/* Phase */}
-                <select
-                  value={editing.phase_type || 'unknown'}
-                  onChange={e => setEditing(d => ({ ...d, phase_type: e.target.value }))}
-                  className="w-full text-sm rounded-xl px-3 py-2.5 font-medium"
-                  style={{ background: 'var(--navy-3)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', outline: 'none' }}>
-                  {PHASES.map(p => <option key={p} value={p}>{PHASE_LABELS[p]}</option>)}
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                <select value={editing.phase_type||'unknown'} onChange={e=>setEditing(d=>({...d,phase_type:e.target.value}))} style={inputStyle}>
+                  {PHASES.map(p=><option key={p} value={p}>{PHASE_LABELS[p]}</option>)}
                 </select>
 
-                {/* Possession */}
-                <div className="grid grid-cols-3 gap-1.5">
-                  {['home', 'away', ''].map(t => (
-                    <button key={t}
-                      onClick={() => setEditing(d => ({ ...d, team_possession: t || null }))}
-                      className="py-2 rounded-xl text-xs font-medium transition-all duration-150"
-                      style={editing.team_possession === (t || null)
-                        ? { background: 'rgba(0,230,118,0.15)', color: 'var(--green)', border: '1px solid rgba(0,230,118,0.4)' }
-                        : { background: 'var(--navy-3)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }}>
-                      {t === 'home' ? match?.home_team?.slice(0, 8) ?? 'Domicile'
-                        : t === 'away' ? match?.away_team?.slice(0, 8) ?? 'Extérieur'
-                        : 'Aucun'}
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6 }}>
+                  {['home','away',''].map(t => (
+                    <button key={t} onClick={()=>setEditing(d=>({...d,team_possession:t||null}))} style={{
+                      padding:'7px 4px', borderRadius:9, fontSize:11, fontWeight:600, cursor:'pointer', transition:'all 0.15s',
+                      background: editing.team_possession===(t||null) ? 'var(--green-soft)' : 'var(--bg-3)',
+                      color:      editing.team_possession===(t||null) ? 'var(--green)'      : 'var(--t2)',
+                      border:     `1px solid ${editing.team_possession===(t||null) ? 'rgba(0,229,160,0.35)' : 'var(--border)'}`,
+                    }}>
+                      {t==='home'?match?.home_team?.slice(0,8)??'Dom':t==='away'?match?.away_team?.slice(0,8)??'Ext':'—'}
                     </button>
                   ))}
                 </div>
 
-                {/* Zone */}
-                <select
-                  value={editing.field_zone || ''}
-                  onChange={e => setEditing(d => ({ ...d, field_zone: e.target.value || null }))}
-                  className="w-full text-sm rounded-xl px-3 py-2.5"
-                  style={{ background: 'var(--navy-3)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', outline: 'none' }}>
+                <select value={editing.field_zone||''} onChange={e=>setEditing(d=>({...d,field_zone:e.target.value||null}))} style={inputStyle}>
                   <option value="">Zone du terrain</option>
-                  {ZONES.map(z => <option key={z} value={z}>{ZONE_LABELS[z]}</option>)}
+                  {ZONES.map(z=><option key={z} value={z}>{ZONE_LABELS[z]}</option>)}
                 </select>
 
-                {/* Label */}
-                <input
-                  value={editing.label || ''}
-                  placeholder="Étiquette libre"
-                  onChange={e => setEditing(d => ({ ...d, label: e.target.value }))}
-                  className="w-full text-sm rounded-xl px-3 py-2.5"
-                  style={{ background: 'var(--navy-3)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', outline: 'none' }} />
+                <input value={editing.label||''} placeholder="Étiquette libre"
+                  onChange={e=>setEditing(d=>({...d,label:e.target.value}))} style={inputStyle}
+                  onFocus={e=>e.target.style.borderColor='var(--green)'} onBlur={e=>e.target.style.borderColor='var(--border)'} />
 
-                {/* Notes */}
-                <textarea
-                  value={editing.notes || ''}
-                  placeholder="Notes..."
-                  onChange={e => setEditing(d => ({ ...d, notes: e.target.value }))}
-                  className="w-full text-sm rounded-xl px-3 py-2.5 resize-none h-16"
-                  style={{ background: 'var(--navy-3)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', outline: 'none' }} />
+                <textarea value={editing.notes||''} placeholder="Notes..."
+                  onChange={e=>setEditing(d=>({...d,notes:e.target.value}))}
+                  style={{...inputStyle, resize:'none', height:60}}
+                  onFocus={e=>e.target.style.borderColor='var(--green)'} onBlur={e=>e.target.style.borderColor='var(--border)'} />
 
-                <button onClick={handleSave}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
-                  style={{ background: 'linear-gradient(135deg, rgba(0,230,118,0.2), rgba(0,176,255,0.2))', color: 'var(--green)', border: '1px solid rgba(0,230,118,0.3)' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(0,230,118,0.3), rgba(0,176,255,0.3))'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(0,230,118,0.2), rgba(0,176,255,0.2))'}>
-                  <Save size={14} /> Enregistrer
-                </button>
+                <RippleButton onClick={handleSave} style={{
+                  display:'flex', alignItems:'center', justifyContent:'center', gap:7, padding:'9px',
+                  borderRadius:11, fontSize:13, fontWeight:700, cursor:'pointer',
+                  background:'linear-gradient(135deg, rgba(0,229,160,0.15), rgba(56,189,248,0.15))',
+                  color:'var(--green)', border:'1px solid rgba(0,229,160,0.3)',
+                }}><Save size={13}/> Enregistrer</RippleButton>
               </div>
             </div>
           )}
 
           {/* Segment list */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+          <div style={{ flex:1, overflowY:'auto', padding:'10px 10px' }}>
             {segments.map(seg => {
-              const style = STATUS_STYLE[seg.status] || STATUS_STYLE.ai_proposed
+              const bs = STATUS_BADGE[seg.status] || STATUS_BADGE.ai_proposed
               const dot = PHASE_DOT[seg.phase_type] || PHASE_DOT.unknown
-              const isSelected = seg.id === selected?.id
-
+              const isSel = seg.id === selected?.id
               return (
-                <button key={seg.id} onClick={() => select(seg)}
-                  className="w-full text-left px-3 py-3 rounded-xl transition-all duration-150"
-                  style={{
-                    background: isSelected ? 'rgba(0,230,118,0.06)' : 'var(--glass)',
-                    border: `1px solid ${isSelected ? 'rgba(0,230,118,0.3)' : 'var(--glass-border)'}`,
-                    boxShadow: isSelected ? '0 0 16px rgba(0,230,118,0.1)' : 'none',
-                  }}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {formatTime(seg.start_time)} — {formatTime(seg.end_time)}
+                <button key={seg.id} onClick={()=>select(seg)} style={{
+                  width:'100%', textAlign:'left', padding:'10px 12px', borderRadius:12,
+                  marginBottom:6, cursor:'pointer', transition:'all 0.15s',
+                  background: isSel ? 'rgba(0,229,160,0.06)' : 'var(--bg-3)',
+                  border: `1px solid ${isSel ? 'rgba(0,229,160,0.3)' : 'var(--border)'}`,
+                  boxShadow: isSel ? '0 0 14px var(--green-glow)' : 'none',
+                }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
+                    <span style={{ fontFamily:'JetBrains Mono,monospace', fontSize:11, color:'var(--t2)' }}>
+                      {fmt(seg.start_time)} — {fmt(seg.end_time)}
                     </span>
-                    <span className="text-xs px-1.5 py-0.5 rounded-md font-semibold"
-                      style={{ background: style.bg, color: style.color }}>
-                      {style.label}
-                    </span>
+                    <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:6, background:bs.bg, color:bs.color }}>{bs.label}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: dot }} />
-                    <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                      {PHASE_LABELS[seg.phase_type] || seg.phase_type}
-                    </span>
-                    {seg.label && (
-                      <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{seg.label}</span>
-                    )}
+                  <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                    <div style={{ width:7, height:7, borderRadius:'50%', background:dot, flexShrink:0 }} />
+                    <span style={{ fontSize:13, fontWeight:600, color:'var(--t1)' }}>{PHASE_LABELS[seg.phase_type]||seg.phase_type}</span>
+                    {seg.label && <span style={{ fontSize:11, color:'var(--t3)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{seg.label}</span>}
                   </div>
                   {seg.ai_confidence != null && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'var(--navy-3)' }}>
-                        <div className="h-full rounded-full" style={{
-                          width: `${seg.ai_confidence * 100}%`,
-                          background: seg.ai_confidence > 0.7 ? 'var(--green)' : seg.ai_confidence > 0.4 ? '#ffd600' : '#ff5252',
-                        }} />
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:6 }}>
+                      <div style={{ flex:1, height:3, borderRadius:3, background:'var(--bg-4)', overflow:'hidden' }}>
+                        <div style={{ height:'100%', borderRadius:3, width:`${seg.ai_confidence*100}%`,
+                          background: seg.ai_confidence>0.7?'var(--green)':seg.ai_confidence>0.4?'var(--gold)':'var(--red)' }} />
                       </div>
-                      <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
-                        {Math.round(seg.ai_confidence * 100)}%
+                      <span style={{ fontFamily:'JetBrains Mono,monospace', fontSize:10, color:'var(--t3)' }}>
+                        {Math.round(seg.ai_confidence*100)}%
                       </span>
                     </div>
                   )}
@@ -369,7 +251,7 @@ export default function ReviewPage() {
               )
             })}
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   )
